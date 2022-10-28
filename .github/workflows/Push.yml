@@ -5,8 +5,6 @@ on:
     branches: [ 'main' ]
     tags:
       - 'v*'
-  pull_request:
-    branches: [ 'main' ]
   workflow_dispatch:
 
 jobs:
@@ -15,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       repo_owner: ${{ steps.repo_owner.outputs.lowercase }}
-      os_matrix: "{\"os_version\":[\"bullseye\",\"buster\",\"ubuntu16\",\"ubuntu18\",\"ubuntu20\"]}"
+      os_matrix: "{\"os_version\":[\"debian11\",\"debian10\",\"ubuntu20\"]}"
     steps:
       - name: Lowercase repo owner
         id: repo_owner
