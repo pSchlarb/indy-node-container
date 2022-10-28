@@ -19,7 +19,7 @@ To build the node image you can use `docker` from the project root like
 
 ```bash
 docker build -f "build/Dockerfile.ubuntu18" -t indy-node-container/indy_node:ubuntu18 ./build
-```
+```asdfasdfafsdf
 
 or you can use `make` which provides some shortcuts
 
