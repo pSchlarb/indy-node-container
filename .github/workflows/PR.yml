@@ -1,13 +1,9 @@
 name: PR Build and Test
 
 on:
-  push:
-    branches: [ 'main' ]
-    tags:
-      - 'v*'
   pull_request:
     branches: [ 'main' ]
-  workflow_dispatch:
+
 
 jobs:
   workflow_setup:
@@ -15,17 +11,30 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       repo_owner: ${{ steps.repo_owner.outputs.lowercase }}
-      os_matrix: "{\"os_version\":[\"bullseye\",\"buster\",\"ubuntu16\",\"ubuntu18\",\"ubuntu20\"]}"
+      os_matrix: "{\"os_version\":[\"debian11\",\"debian10\",\"ubuntu20\"]}"
+      testsNeeded: ${{ steps.testsNeeded.outputs.testsNeeded }}
     steps:
       - name: Lowercase repo owner
         id: repo_owner
         run: echo "::set-output name=lowercase::$(echo ${{ github.repository_owner }} | tr \"[:upper:]\" \"[:lower:]\")"
         shell: bash
+      - name: testsNeeded
+        id: testsNeeded
+        uses: dorny/paths-filter@v2
+        with:
+          filters: |
+            testsNeeded:
+              - '**/Dockerfile**'
+              - '**.yaml'
+              - '**.yml'
+              - '**.sh'
+              - '**.py'
 
   build_nodes:
     name: Build node images
     runs-on: ubuntu-latest
     needs: workflow_setup
+    if: ${{ needs.workflow_setup.outputs.testsNeeded == 'true' }}
     strategy:
       matrix: ${{ fromJson(needs.workflow_setup.outputs.os_matrix) }}
     steps:
@@ -70,6 +79,7 @@ jobs:
     name: Build controller image
     runs-on: ubuntu-latest
     needs: workflow_setup
+    if: ${{ needs.workflow_setup.outputs.testsNeeded == 'true' }}
     steps:
       - name: Check out the repo
         uses: actions/checkout@v2
@@ -106,6 +116,7 @@ jobs:
   test_node_and_controller:
     runs-on: ubuntu-latest
     needs: [workflow_setup, build_controller, build_nodes]
+    if: ${{ needs.workflow_setup.outputs.testsNeeded == 'true' }}
     strategy:
       matrix: ${{ fromJson(needs.workflow_setup.outputs.os_matrix) }}
       fail-fast: false
@@ -178,111 +189,11 @@ jobs:
         with:
           script: core.setFailed('${{ matrix.os_version }} - Not all nodes have been restarted')
 
-  push_node:
+
+  statusCheck:
+    name: statusCheck
     runs-on: ubuntu-latest
     needs: [workflow_setup, test_node_and_controller]
-    strategy:
-      matrix: ${{ fromJson(needs.workflow_setup.outputs.os_matrix) }}
+    if: ${{ needs.workflow_setup.outputs.testsNeeded == 'false' || success() }}
     steps:
-      - name: Check out the repo
-        uses: actions/checkout@v2
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-      - name: Cache Docker layers
-        uses: actions/cache@v2
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ matrix.os_version }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-${{ matrix.os_version }}
-            ${{ runner.os }}-buildx
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v1
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Meta for indy_node
-        id: meta_indy_node
-        uses: docker/metadata-action@v3
-        with:
-          images: ghcr.io/${{ needs.workflow_setup.outputs.repo_owner }}/indy-node-container/indy_node
-          flavor: |
-            suffix=-${{ matrix.os_version }},onlatest=true
-            latest=auto
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-          labels: |
-            org.opencontainers.image.title=Indy Node Container
-            org.opencontainers.image.description=Indy Node Container based on ${{ matrix.os_version }}
-            org.opencontainers.image.vendor=Hyperledger
-      - name: Push indy node based on ${{ matrix.os_version }}
-        uses: docker/build-push-action@v2
-        with:
-          file: build/Dockerfile.${{ matrix.os_version }}
-          context: ./build
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta_indy_node.outputs.tags }}
-          labels: ${{ steps.meta_indy_node.outputs.labels }}
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new
-      - name: Move cache
-        run: |
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
-         
-  push_controller:
-    runs-on: ubuntu-latest
-    needs: [workflow_setup, test_node_and_controller]
-    steps:
-      - name: Check out the repo
-        uses: actions/checkout@v2
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-      - name: Cache Docker layers
-        uses: actions/cache@v2
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-controler
-          restore-keys: |
-            ${{ runner.os }}-buildx-controller
-            ${{ runner.os }}-buildx
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v1
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Meta for indy_node_controller
-        id: meta_indy_node_controller
-        uses: docker/metadata-action@v3
-        with:
-          images: ghcr.io/${{ needs.workflow_setup.outputs.repo_owner }}/indy-node-container/indy_node_controller
-          flavor: |
-            onlatest=true
-            latest=auto
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-          labels: |
-            org.opencontainers.image.title=Indy Node Container Controller
-            org.opencontainers.image.description=Indy Node Container Controller
-            org.opencontainers.image.vendor=Hyperledger
-      - name: Push indy node controller
-        uses: docker/build-push-action@v2
-        with:
-          context: ./controller
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta_indy_node_controller.outputs.tags }}
-          labels: ${{ steps.meta_indy_node_controller.outputs.labels }}
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new
-      - name: Move cache
-        run: |
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+      - run: 'echo "Just a status Check (Always true, when executed) for branch protection rules(blocks merging while test are running and if tests fail)." '
