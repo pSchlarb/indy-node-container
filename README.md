@@ -15,7 +15,7 @@ See [here](run/) for instructions how to setup and run the indy node images from
 
 ## Building
 
-To build the node image you can use `docker` from the project root like
+To build the node image you can use `docker` from the project root likeasdfasdf
 
 ```bash
 docker build -f "build/Dockerfile.ubuntu18" -t indy-node-container/indy_node:ubuntu18 ./build
