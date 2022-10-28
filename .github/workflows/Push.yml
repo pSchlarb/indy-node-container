@@ -17,7 +17,7 @@ jobs:
     steps:
       - name: Lowercase repo owner
         id: repo_owner
-        run: echo "::set-output name=lowercase::$(echo ${{ github.repository_owner }} | tr \"[:upper:]\" \"[:lower:]\")"
+        run: echo "lowercase=$(echo ${{ github.repository_owner }} | tr \"[:upper:]\" \"[:lower:]\")" >>$GITHUB_OUTPUT
         shell: bash
 
   build_nodes:
@@ -28,11 +28,11 @@ jobs:
       matrix: ${{ fromJson(needs.workflow_setup.outputs.os_matrix) }}
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
       - name: Cache Docker layers
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache
           key: ${{ runner.os }}-buildx-${{ matrix.os_version }}-${{ github.sha }}
@@ -40,7 +40,7 @@ jobs:
             ${{ runner.os }}-buildx-${{ matrix.os_version }}
             ${{ runner.os }}-buildx
       - name: Build node image based on ${{ matrix.os_version }}
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v3
         with:
           file: build/Dockerfile.${{ matrix.os_version }}
           context: ./build
@@ -50,7 +50,7 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new
       - name: Upload docker image artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: indy_node_${{ matrix.os_version }}
           path: /tmp/indy_node_${{ matrix.os_version }}.tar
@@ -70,11 +70,11 @@ jobs:
     needs: workflow_setup
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
       - name: Cache Docker layers
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache
           key: ${{ runner.os }}-buildx-controler
@@ -82,7 +82,7 @@ jobs:
             ${{ runner.os }}-buildx-controller
             ${{ runner.os }}-buildx
       - name: Build node controller image
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v3
         with:
           context: ./controller
           push: false
@@ -91,7 +91,7 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new
       - name: Upload docker image artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: indy_node_controller
           path: /tmp/indy_node_controller.tar
@@ -109,9 +109,9 @@ jobs:
       fail-fast: false
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
         with:
           driver-opts: network=host
       - name: Download node artifact
@@ -140,7 +140,7 @@ jobs:
           cd test 
           ./parse_validator_info.sh
       - name: Safe ledger_state.json for later inspection
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: ${{ matrix.os_version }}-tmp-test-${{ github.sha }}-ledger_state.json
           path: ledger_state.json
@@ -183,21 +183,21 @@ jobs:
       matrix: ${{ fromJson(needs.workflow_setup.outputs.os_matrix) }}
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: indy-node-version
         id: indy-node-version
         shell: bash
         run: |
-          export nodeVersion=$(grep -oP "indy-node=\"?\d+.\d+.\d+((~|.|-)?rc\d+)?\"?" build/Dockerfile.${{ matrix.os_version }} | grep -oP "\d+.\d+.\d+((~|.|-)?rc\d+)?")
+          export nodeVersion=$(sed "s/~/-/" <<<$(grep -oP "indy-node=\"?\d+.\d+.\d+((~|.)?rc\d+)?\"?" build/Dockerfile.ubuntu20 | grep -oP "\d+.\d+.\d+((~|.|-)?rc\d+)?"))
           echo "::debug::IndyNode Version is ${nodeVersion}"
           echo "::group::DEBUG"
           echo "IndyNode Version is ${nodeVersion}"
           echo "::endgroup::"
           echo "nodeVersion=${nodeVersion}">> $GITHUB_OUTPUT
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
       - name: Cache Docker layers
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache
           key: ${{ runner.os }}-buildx-${{ matrix.os_version }}-${{ github.sha }}
@@ -228,7 +228,7 @@ jobs:
             org.opencontainers.image.description=Indy Node Container based on ${{ matrix.os_version }}
             org.opencontainers.image.vendor=Hyperledger
       - name: Push indy node based on ${{ matrix.os_version }}
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v3
         with:
           file: build/Dockerfile.${{ matrix.os_version }}
           context: ./build
@@ -247,11 +247,11 @@ jobs:
     needs: [workflow_setup, test_node_and_controller]
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
       - name: Cache Docker layers
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache
           key: ${{ runner.os }}-buildx-controler
@@ -282,7 +282,7 @@ jobs:
             org.opencontainers.image.description=Indy Node Container Controller
             org.opencontainers.image.vendor=Hyperledger
       - name: Push indy node controller
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v3
         with:
           context: ./controller
           push: ${{ github.event_name != 'pull_request' }}
