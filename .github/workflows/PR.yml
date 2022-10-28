@@ -16,7 +16,7 @@ jobs:
     steps:
       - name: Lowercase repo owner
         id: repo_owner
-        run: echo "::set-output name=lowercase::$(echo ${{ github.repository_owner }} | tr \"[:upper:]\" \"[:lower:]\")"
+        run: echo "lowercase=$(echo ${{ github.repository_owner }} | tr \"[:upper:]\" \"[:lower:]\")" >>$GITHUB_OUTPUT
         shell: bash
       - name: testsNeeded
         id: testsNeeded
@@ -39,11 +39,11 @@ jobs:
       matrix: ${{ fromJson(needs.workflow_setup.outputs.os_matrix) }}
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
       - name: Cache Docker layers
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache
           key: ${{ runner.os }}-buildx-${{ matrix.os_version }}-${{ github.sha }}
@@ -51,7 +51,7 @@ jobs:
             ${{ runner.os }}-buildx-${{ matrix.os_version }}
             ${{ runner.os }}-buildx
       - name: Build node image based on ${{ matrix.os_version }}
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v3
         with:
           file: build/Dockerfile.${{ matrix.os_version }}
           context: ./build
@@ -61,7 +61,7 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new
       - name: Upload docker image artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: indy_node_${{ matrix.os_version }}
           path: /tmp/indy_node_${{ matrix.os_version }}.tar
@@ -82,11 +82,11 @@ jobs:
     if: ${{ needs.workflow_setup.outputs.testsNeeded == 'true' }}
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
       - name: Cache Docker layers
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache
           key: ${{ runner.os }}-buildx-controler
@@ -94,7 +94,7 @@ jobs:
             ${{ runner.os }}-buildx-controller
             ${{ runner.os }}-buildx
       - name: Build node controller image
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v3
         with:
           context: ./controller
           push: false
@@ -103,7 +103,7 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new
       - name: Upload docker image artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: indy_node_controller
           path: /tmp/indy_node_controller.tar
@@ -122,18 +122,18 @@ jobs:
       fail-fast: false
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
         with:
           driver-opts: network=host
       - name: Download node artifact
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: indy_node_${{ matrix.os_version }}
           path: /tmp
       - name: Download controller artifact
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: indy_node_controller
           path: /tmp
@@ -151,9 +151,11 @@ jobs:
           echo "Waiting 30 seconds for the ledger browser to start..."
           sleep 30
           cd test 
+          echo "::group::ParseValidatorOutput"
           ./parse_validator_info.sh
+          echo "::endgroup::"
       - name: Safe ledger_state.json for later inspection
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: ${{ matrix.os_version }}-tmp-test-${{ github.sha }}-ledger_state.json
           path: ledger_state.json
@@ -182,7 +184,7 @@ jobs:
         run: |
           sleep 20
           OUTPUT="$(docker ps --filter "name=node" --format "{{.Status}}" | grep -o 'Up [0-9]\+ seconds' | cut -d' ' -f2 | awk -v ORS='\\n' '1' | head -c -2)"
-          echo "::set-output name=count::$({ echo -e $OUTPUT | wc -l ; echo -e $OUTPUT | awk -F= '$1<30' | wc -l; } | sort -n | head -1)"
+          echo "count=$({ echo -e $OUTPUT | wc -l ; echo -e $OUTPUT | awk -F= '$1<30' | wc -l; } | sort -n | head -1)" >> $GITHUB_OUTPUT
       - name: Fail if not all nodes restarted      
         if: steps.nodes_restarted.outputs.count != 4
         uses: actions/github-script@v3
