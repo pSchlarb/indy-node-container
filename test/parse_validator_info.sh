@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # This script is intended to run as part of a docker action to extract the ledger state and output it 
+#asdfasdf
 
 set -e
 
